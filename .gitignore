@@ -1,0 +1,11 @@
+# 가상환경
+/.venv
+/.vscode
+# 파이캐시
+**/__pycache__/
+
+# 전처리 파일 -> 어자피 돌리면 생김
+/data/processed
+
+# Qdrant DB -> 깃에 올리면 재앙임;
+/data/index
