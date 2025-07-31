@@ -1,8 +1,8 @@
 # config/embedding_config.py
-from config.embedding_config import EmbeddingType
 from typing import Dict, Optional, Literal
 from dataclasses import dataclass
 from enum import Enum
+
 
 class EmbeddingType(str, Enum): 
     DENSE_SMALL = "dense_small"
@@ -30,7 +30,7 @@ class EmbeddingRoutingConfig:
 EMBEDDING_TYPE_CONFIGS: Dict[EmbeddingType, EmbeddingRoutingConfig] = {
     EmbeddingType.SPARSE: EmbeddingRoutingConfig(
         provider = "vectorizer",
-        vectorizer_type = "bm25",
+        vectorizer_type = "tfidf",
         language = "en"
     ),
     EmbeddingType.DENSE_LARGE: EmbeddingRoutingConfig(

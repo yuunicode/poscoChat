@@ -11,4 +11,3 @@ class ChunkingStrategy(Enum):
     RECURSIVE = "recursive"
     HIERARCHICAL = "hierarchical"
     ROW = "row"
-

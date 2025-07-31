@@ -34,7 +34,7 @@ def main():
 
     indexing_type = "hnsw" # or "flat"
     distance_type = "Cosine"  # or "Dot", "Euclidean"
-    USE_CUDA = True # CUDA 사용 여부
+    USE_CUDA = False # CUDA 사용 여부
 
     batch_size          = 2
     update_colbert      = True

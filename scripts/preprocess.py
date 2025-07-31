@@ -477,29 +477,32 @@ class PptxPreprocessor(BasePreprocessor):
         records: List[Dict[str, Any]] = []
         table_info_cache: Dict[str, Any] = {}
 
-        for slide in prs.slides:
+        for slide_idx, slide in enumerate(prs.slides):
             slide_title = None
             sub_title = None
 
-            # 제목과 소제목 감지 (placeholder 우선)
+        # 제목과 소제목 감지 (placeholder 우선)
             for shape in slide.shapes:
-                if not shape.has_text_frame:
-                    continue
-                if not shape.is_placeholder:
-                    continue
+                # Ensure it has a text frame and is a placeholder before trying to access placeholder_format or text
+                if shape.has_text_frame and shape.is_placeholder:
+                    try:
+                        phf_type = shape.placeholder_format.type
+                        if hasattr(shape, "text_frame") and shape.text_frame is not None:
+                            text = shape.text_frame.text.strip()
+                        else:
+                            continue
+                        if not text:
+                            continue
 
-                try:
-                    phf_type = shape.placeholder_format.type
-                    text = shape.text.strip()
-                    if not text:
+                        if phf_type.name == "TITLE" and not slide_title:
+                            slide_title = text
+                        elif phf_type.name == "SUBTITLE" and not sub_title:
+                            sub_title = text
+                    except AttributeError: # Catch specific AttributeError for placeholder_format if it occurs unexpectedly
                         continue
-
-                    if phf_type.name == "TITLE" and not slide_title:
-                        slide_title = text
-                    elif phf_type.name == "SUBTITLE" and not sub_title:
-                        sub_title = text
-                except Exception:
-                    continue
+                    except Exception as e:
+                        logging.error(f"Error processing placeholder shape on slide {slide_idx}: {e}")
+                        continue
 
             # section path 구성
             section_titles = [slide_title, sub_title]
@@ -517,7 +520,7 @@ class PptxPreprocessor(BasePreprocessor):
                 record_id = str(uuid.uuid4())
 
                 if shape.has_text_frame:
-                    text = shape.text.strip()
+                    text = shape.text_frame.text.strip()
                     if not text or text in section_titles:
                         continue  # 제목/소제목은 context로 저장하지 않음
                 
@@ -538,7 +541,10 @@ class PptxPreprocessor(BasePreprocessor):
                 
                 # -------- 조건문 추가: 테이블 카테고리인 경우 테이블 정보 추출
                 elif shape.shape_type == MSO_SHAPE_TYPE.TABLE:
-                    table = shape.table
+                    # Ensure the shape has a 'table' attribute before accessing it
+                    table = getattr(shape, "table", None)
+                    if table is None:
+                        continue  # Skip if not a real table
                     html = "<table>\n"
                     for row in table.rows:
                         html += "  <tr>" + "".join(f"<td>{cell.text.strip()}</td>" for cell in row.cells) + "</tr>\n"

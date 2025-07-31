@@ -40,8 +40,6 @@ class BaseSparseVectorizer(ABC):
     def __init__(self, pkl_path: Path, language: str):
         self.pkl_path = pkl_path
         self.language = language
-        if language == "unknown":
-             raise ValueError("The 'language' parameter cannot be None.")  # 모르는 값이면 오류 발생
 
     @abstractmethod
     def fit(self, texts: List[str]):

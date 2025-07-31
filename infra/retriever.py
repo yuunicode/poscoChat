@@ -64,6 +64,3 @@ class DenseSearch(SearchModule):
         ).points
 
         return result
-
-class HybridSearch(SearchModule):
-    def __
