@@ -64,3 +64,20 @@ class DenseSearch(SearchModule):
         ).points
 
         return result
+
+class HybridSearch(SearchModule):
+    def __init__(self, embedding: BaseEmbedding, collection_name: str, vectorstore: Qdrant):
+        super().__init__(vectorstore)
+        self.embedding = embedding
+        self.collection_name = collection_name
+        
+    def search(self, query: str) -> List:
+        embedding_vector = self.embedding.encode([query])[0]
+        result = self.vectorstore.client.query_points(
+            collection_name = self.collection_name,
+            query = embedding_vector,
+            using = self.embedding.embedding_type.value,
+            limit = 20
+        ).points
+
+        return result

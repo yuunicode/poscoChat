@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     #               사용자 설정 파트   
     # -----------------------------------------
     COLLECTION_NAME: str = "collection"
-    FILENAME: str = "table_test.docx"
+    FILENAME: str = "course_material.pptx"
     # ----------------------------------------- 
     #               경로   
     # -----------------------------------------    
