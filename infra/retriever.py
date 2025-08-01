@@ -6,7 +6,7 @@ from infra.embedding import BaseEmbedding
 from infra.vectorstore import Qdrant
 from infra.vectorizer import BaseSparseVectorizer
 from sentence_transformers import CrossEncoder
-from qdrant_client.http.models import PointStruct, SparseVector, ScoredPoint
+from qdrant_client.http.models import PointStruct, SparseVector, ScoredPoint, Fusion, FusionQuery, Prefetch
 import logging
 
 class SearchModule(ABC):
@@ -55,7 +55,7 @@ class DenseSearch(SearchModule):
         self.collection_name = collection_name
         
     def search(self, query: str) -> List:
-        embedding_vector = self.embedding.encode([query])[0]
+        embedding_vector = list(self.embedding.encode([query]))[0]
         result = self.vectorstore.client.query_points(
             collection_name = self.collection_name,
             query = embedding_vector,
@@ -66,18 +66,36 @@ class DenseSearch(SearchModule):
         return result
 
 class HybridSearch(SearchModule):
-    def __init__(self, embedding: BaseEmbedding, collection_name: str, vectorstore: Qdrant):
+    def __init__(self, sparse_vectorizer: BaseSparseVectorizer, embedding: BaseEmbedding, collection_name: str, vectorstore: Qdrant):
         super().__init__(vectorstore)
         self.embedding = embedding
+        self.sparse_vectorizer = sparse_vectorizer
         self.collection_name = collection_name
         
     def search(self, query: str) -> List:
-        embedding_vector = self.embedding.encode([query])[0]
+        # 희소벡터
+        sparse_vectors = self.sparse_vectorizer.transform([query])
+        # Convert the dict to a SparseVector if necessary
+        sparse_vector = SparseVector(**sparse_vectors[0]) if isinstance(sparse_vectors[0], dict) else sparse_vectors[0]
+
+        # 밀집벡터
+        embedding_vector = list(self.embedding.encode([query]))[0]
+
         result = self.vectorstore.client.query_points(
             collection_name = self.collection_name,
-            query = embedding_vector,
-            using = self.embedding.embedding_type.value,
-            limit = 20
+            prefetch=[
+                Prefetch(
+                    query = sparse_vector,
+                    using = EmbeddingType.SPARSE.value,
+                    limit = 20,
+                ),
+                Prefetch(
+                    query = embedding_vector,
+                    using = self.embedding.embedding_type.value,
+                    limit = 20,
+                ),
+            ],
+            query = FusionQuery(fusion = Fusion.RRF),
         ).points
 
         return result
