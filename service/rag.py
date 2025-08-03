@@ -1,4 +1,7 @@
 # service/rag_service.py
+"""
+ RAG 서비스 로직이 담겨있습니다. main.py에서는 사용자 입력 등을 받아 이 클래스에서 로직을 실행합니다.
+"""
 from typing import List, Tuple
 import time
 from infra.retriever import SearchModule, SparseSearch, DenseSearch, HybridSearch, MultiStageSearch
@@ -25,7 +28,6 @@ class RagService:
         """
         start_time = time.time()
         results = self.search_module.search(query)
-        print(results)
         search_time = time.time() - start_time
         prompt_template = self.generator.select_prompt(prompt_type)
 
@@ -57,12 +59,13 @@ if __name__ == "__main__":
 
     # 하이브리드 검색과 Ollama 생성기 구성
     search_module = MultiStageSearch(embedding_dense, embedding_colbert, collection_name, qdrant)
+    # generator = OpenRouterGenerator("qwen/qwen3-8b:free")
     generator = OllamaGenerator("qwen3:4b")
 
     # 서비스 실행
     rag = RagService(search_module, generator)
     query = "가중치가 신경망을 생성할 때 어떤 값을 가져?"
-    prompt_type = "workflow"
+    prompt_type = "default"
 
     results, answers, search_time, generation_time = rag.retrieve_and_generate(query, prompt_type)
 

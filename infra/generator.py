@@ -144,9 +144,9 @@ class BaseLLMGenerator(ABC):
             """
         else:
             prompt = """
-            Question: {query}
-            Reference context: {context}
-            Answer:
+            질문: {query}
+            참고 자료: {context}
+            답변:
             """
 
         return prompt
@@ -188,7 +188,7 @@ class OllamaGenerator(BaseLLMGenerator):
     def __init__(self, model_name: str):
 
         super().__init__(model_name)
-        self.api_url = "http://127.0.0.1:11434/api/chat"
+        self.api_url = "http://localhost:11434/api/chat"
 
     def generate_answers(self, results, user_query: str, prompt_template: str):
         context_texts = []
@@ -218,7 +218,7 @@ class OllamaGenerator(BaseLLMGenerator):
         resp = requests.post(self.api_url, json=payload)
         resp.raise_for_status()
         data = resp.json()
-        
+        print(f"json: {data}")
         answer = data.get('message', {}).get('content', '').strip() or data.get('response', '').strip()
         section_paths = self.filter_references_by_similarity(answer, results)
         section_info = ""
