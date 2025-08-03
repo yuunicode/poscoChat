@@ -219,6 +219,7 @@ class OllamaGenerator(BaseLLMGenerator):
         resp.raise_for_status()
         data = resp.json()
         print(f"json: {data}")
+        
         answer = data.get('message', {}).get('content', '').strip() or data.get('response', '').strip()
         section_paths = self.filter_references_by_similarity(answer, results)
         section_info = ""
@@ -253,7 +254,6 @@ class OpenRouterGenerator(BaseLLMGenerator):
                 section_paths.append(section_path)
 
         joined_context = "\n\n".join(context_texts)
-
         answers = []
         prompt = prompt_template.format(context=joined_context, query=user_query)
         response = self.client.chat.completions.create(
@@ -261,6 +261,7 @@ class OpenRouterGenerator(BaseLLMGenerator):
             messages    = [{"role": "user", "content": prompt}],
             temperature = 0.5,
             top_p = 0.7,
+            timeout = 60
         )
         answer = response.choices[0].message.content or "[No response received]"
         # 답변 마지막에 section_path(출처) 추가

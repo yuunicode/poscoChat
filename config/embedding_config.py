@@ -57,5 +57,19 @@ EMBEDDING_TYPE_CONFIGS: Dict[EmbeddingType, EmbeddingRoutingConfig] = {
         model_name = "jinaai/jina-colbert-v2"
     ),    
 }
-
+# EMBEDDING_TYPE_CONFIGS: Dict[EmbeddingType, EmbeddingRoutingConfig] = {
+#     EmbeddingType.SPARSE: EmbeddingRoutingConfig(
+#         provider = "vectorizer",
+#         vectorizer_type = "bm25",
+#         language = "kr"
+#     ),
+#     EmbeddingType.DENSE_LARGE: EmbeddingRoutingConfig(
+#         provider = "huggingface",
+#         model_name = "nomic-ai/nomic-embed-text-v1.5-Q"
+#     ),
+#     EmbeddingType.COLBERT: EmbeddingRoutingConfig(
+#         provider = "huggingface",
+#         model_name = "jinaai/jina-colbert-v2"
+#     ),    
+# }
 

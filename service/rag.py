@@ -20,6 +20,7 @@ class RagService:
     def retrieve_and_generate(
         self, 
         query: str, 
+        use_cross_encoder: bool,
         prompt_type: str
     ) -> Tuple[List, List, float, float]:
         """
@@ -27,7 +28,7 @@ class RagService:
         prompt_type: configuration / workflow / definition 등
         """
         start_time = time.time()
-        results = self.search_module.search(query)
+        results = self.search_module.search(query, use_cross_encoder)
         search_time = time.time() - start_time
         prompt_template = self.generator.select_prompt(prompt_type)
 
@@ -59,15 +60,16 @@ if __name__ == "__main__":
 
     # 하이브리드 검색과 Ollama 생성기 구성
     search_module = MultiStageSearch(embedding_dense, embedding_colbert, collection_name, qdrant)
-    # generator = OpenRouterGenerator("qwen/qwen3-8b:free")
-    generator = OllamaGenerator("qwen3:4b")
+    generator = OpenRouterGenerator("qwen/qwen3-8b:free")
+    # generator = OllamaGenerator("qwen3:4b")
 
     # 서비스 실행
     rag = RagService(search_module, generator)
     query = "가중치가 신경망을 생성할 때 어떤 값을 가져?"
     prompt_type = "default"
+    use_cross_encoder = True
 
-    results, answers, search_time, generation_time = rag.retrieve_and_generate(query, prompt_type)
+    results, answers, search_time, generation_time = rag.retrieve_and_generate(query, use_cross_encoder, prompt_type)
 
     print(f"검색 시간: {search_time:.2f}s")
     print(f"생성 시간: {generation_time:.2f}s")

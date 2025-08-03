@@ -7,7 +7,7 @@ from infra.vectorstore import Qdrant
 from infra.vectorizer import BaseSparseVectorizer
 from sentence_transformers import CrossEncoder
 from qdrant_client.http.models import PointStruct, SparseVector, ScoredPoint, Fusion, FusionQuery, Prefetch
-import logging
+
 
 class SearchModule(ABC):
     def __init__(self, 
@@ -15,17 +15,18 @@ class SearchModule(ABC):
         self.vectorstore = vectorstore
 
     @abstractmethod
-    def search(self, query: str) -> List[ScoredPoint]: pass
+    def search(self, query: str, use_cross_encoder: bool) -> List[ScoredPoint]: pass
 
     def apply_cross_encoder_rerank(self,
-                                   model_name: str,
                                    query: str,
-                                   results: List[PointStruct]):
+                                   results: List[PointStruct],
+                                   model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"):
         
         cross_encoder = CrossEncoder(model_name)
         pairs = [(query, r.payload['content']) if r.payload and r.payload.get('content') else (query,"") for r in results]  # (query, doc) pair 생성
         scores = cross_encoder.predict(pairs)  # Cross-Encoder로 점수 예측
         sorted_results = [x for _, x in sorted(zip(scores, results), key = lambda y: y[0], reverse = True)]  # 점수로 정렬
+
         return sorted_results
     
 class SparseSearch(SearchModule):
@@ -34,7 +35,7 @@ class SparseSearch(SearchModule):
         self.sparse_vectorizer = sparse_vectorizer
         self.collection_name = collection_name
         
-    def search(self, query: str) -> List[ScoredPoint]:
+    def search(self, query: str, use_cross_encoder: bool = False) -> List[ScoredPoint]:
         sparse_vectors = self.sparse_vectorizer.transform([query])
         sparse_vector = SparseVector(**sparse_vectors[0]) if isinstance(sparse_vectors[0], dict) else sparse_vectors[0]
 
@@ -45,6 +46,10 @@ class SparseSearch(SearchModule):
             limit = 20
         ).points
 
+        # Cross-Encoder Rerank 적용
+        if use_cross_encoder:
+            result = self.apply_cross_encoder_rerank(query, result)
+
         return result
 
 class DenseSearch(SearchModule):
@@ -53,7 +58,7 @@ class DenseSearch(SearchModule):
         self.embedding = embedding
         self.collection_name = collection_name
         
-    def search(self, query: str) -> List[ScoredPoint]:
+    def search(self, query: str, use_cross_encoder: bool) -> List[ScoredPoint]:
         embedding_vector = list(self.embedding.encode([query]))[0]
         # List[float] 타입 커버
         if hasattr(embedding_vector, "tolist"):
@@ -68,6 +73,11 @@ class DenseSearch(SearchModule):
             limit = 20
         ).points
 
+        
+        # Cross-Encoder Rerank 적용
+        if use_cross_encoder:
+            result = self.apply_cross_encoder_rerank(query, result)
+
         return result
 
 class HybridSearch(SearchModule):
@@ -77,7 +87,7 @@ class HybridSearch(SearchModule):
         self.sparse_vectorizer = sparse_vectorizer
         self.collection_name = collection_name
         
-    def search(self, query: str) -> List:
+    def search(self, query: str, use_cross_encoder: bool) -> List:
         # 희소벡터
         sparse_vectors = self.sparse_vectorizer.transform([query])
         sparse_vector = SparseVector(**sparse_vectors[0]) if isinstance(sparse_vectors[0], dict) else sparse_vectors[0]
@@ -108,6 +118,11 @@ class HybridSearch(SearchModule):
             query = FusionQuery(fusion = Fusion.RRF)
         ).points
         
+        
+        # Cross-Encoder Rerank 적용
+        if use_cross_encoder:
+            result = self.apply_cross_encoder_rerank(query, result)
+
         return result
 
 class MultiStageSearch(SearchModule):
@@ -117,7 +132,7 @@ class MultiStageSearch(SearchModule):
         self.colbert_embedding = colbert_embedding
         self.collection_name = collection_name
         
-    def search(self, query: str) -> List:
+    def search(self, query: str, use_cross_encoder: bool) -> List:
 
         # 밀집벡터
         dense_embedding_vector = list(self.dense_embedding.encode([query]))[0]
@@ -147,5 +162,9 @@ class MultiStageSearch(SearchModule):
             limit = 20
         ).points
         
+        # Cross-Encoder Rerank 적용
+        if use_cross_encoder:
+            result = self.apply_cross_encoder_rerank(query, result)
+
         return result
 

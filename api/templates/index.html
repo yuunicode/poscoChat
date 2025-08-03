@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>ECMiner Chatbot</title>
+    <style>
+        body {
+            background: #f7f7fa;
+            font-family: 'Segoe UI', '맑은 고딕', Arial, sans-serif;
+            margin: 0; padding: 0;
+        }
+        .chat-container {
+            max-width: 650px; margin: 40px auto 0 auto;
+            background: #fff; border-radius: 16px;
+            box-shadow: 0 2px 24px rgba(0,0,0,0.09);
+            padding: 28px 22px 18px 22px;
+        }
+        .chat-title { display: flex; align-items: center; margin-bottom: 16px;}
+        .gpt-logo { width: 34px; height: 34px; border-radius: 50%;
+            background: #10a37f; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; color: #fff; font-size: 16px; margin-right: 11px;}
+        .chat-title-text { font-size: 1.32rem; color: #24292f; font-weight: 700; letter-spacing: -0.5px;}
+        .chat-messages { margin-bottom: 24px; min-height: 60px; }
+        .chat-bubble { display: flex; align-items: flex-end; margin-bottom: 18px;}
+        .chat-bubble.user { flex-direction: row-reverse; }
+        .chat-bubble .bubble { padding: 13px 18px; border-radius: 18px;
+            max-width: 82%; word-break: break-all; box-shadow: 0 1px 5px rgba(60,60,60,0.05);
+            font-size: 16px; line-height: 1.6; }
+        .chat-bubble.user .bubble { background: #f0f0f0; color: #333; border-bottom-right-radius: 6px;}
+        .chat-bubble.gpt .bubble { background: #e4f6f1; color: #124635; border-bottom-left-radius: 6px;}
+        .chat-bubble .avatar { margin: 0 7px; width: 32px; height: 32px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: #dadada; color: #777; font-weight: bold; font-size: 16px;}
+        .chat-bubble.gpt .avatar { background: #10a37f; color: #fff; font-size: 17px;}
+        .chat-input-row-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px;}
+        .chat-input-row-top input[type="text"] { flex: 1; padding: 9px 12px; border: 1.5px solid #ddd;
+            border-radius: 12px; font-size: 15px;}
+        .chat-input-row-top button { background: #10a37f; color: #fff; font-weight: bold; border: none;
+            border-radius: 12px; padding: 9px 19px; font-size: 15px; cursor: pointer;
+            transition: background 0.18s;}
+        .chat-input-row-top button:disabled { background: #c0e8dd; cursor: not-allowed;}
+        .chat-input-row-bottom { display: flex; align-items: center; gap: 8px;}
+        .chat-input-row-bottom select { padding: 9px 12px; border: 1px solid #ddd;
+            border-radius: 12px; font-size: 15px;}
+        .chat-input-row-bottom label { margin-left: 8px;}
+        #loading-message { display: none; color: #10a37f; text-align: center; margin: 18px 0 5px 0;
+            font-size: 1.06em; font-weight: bold;}
+        
+        /* 캔버스 모달 스타일 */
+        #log-canvas {
+            display: none; position: fixed; left: 0; top: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.13); z-index: 1000; align-items: center; justify-content: center;
+        }
+        #log-canvas-inner {
+            background: #fff; border-radius: 12px; padding: 24px; min-width: 340px; max-width: 80vw; max-height: 88vh;
+            overflow-y: auto; margin: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.14); position: relative;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-title">
+            <div class="gpt-logo">EC</div>
+            <div class="chat-title-text">ECMiner Chatbot</div>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            {% if single_answer %}
+                {% for a in single_answer %}
+                    {% if a.query %}
+                    <div class="chat-bubble user">
+                        <div class="avatar">👤</div>
+                        <div class="bubble">{{ a.query }}</div>
+                    </div>
+                    {% endif %}
+                    {% if a.answer %}
+                    <div class="chat-bubble gpt">
+                        <div class="avatar">EC</div>
+                        <div class="bubble">{{ a.answer | markdown | safe }}</div>
+                    </div>
+                    {% endif %}         
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div id="loading-message">GPT가 답변을 생성 중입니다...</div>
+
+        <form method="post" id="search-form" class="chat-input-row" onsubmit="showLoading()">
+           <div class="chat-input-row-top">
+                <input type="text" name="query" id="query-input" value="{{ query or '' }}" autocomplete="off" autofocus placeholder="질문 해보시라우" style="flex:1;">
+                <button type="submit" id="search-btn">Send</button>
+            </div>
+            <div class="chat-input-row-bottom">
+                <select name="search_type">
+                    <option value="COLBERT_RERANK" {% if search_type == "COLBERT_RERANK" %}selected{% endif %}>ColBERT Rerank</option>
+                    <option value="SPARSE" {% if search_type == "SPARSE" %}selected{% endif %}>Sparse</option>
+                    <option value="DENSE_LARGE" {% if search_type == "DENSE_LARGE" %}selected{% endif %}>Dense Large</option>
+                    <option value="HYBRID" {% if search_type == "HYBRID" %}selected{% endif %}>Hybrid</option>
+                </select>
+                <select name="prompt_type">
+                    <option value="configuration" {% if prompt_type == "configuration" %}selected{% endif %}>설정 방법</option>
+                    <option value="workflow" {% if prompt_type == "workflow" %}selected{% endif %}>작업 절차</option>
+                    <option value="availability" {% if prompt_type == "availability" %}selected{% endif %}>기능 지원 여부</option>
+                    <option value="function" {% if prompt_type == "function" %}selected{% endif %}>기능 설명</option>
+                    <option value="definition" {% if prompt_type == "definition" %}selected{% endif %}>용어 정의</option>
+                    <option value="error" {% if prompt_type == "error" %}selected{% endif %}>에러/문제 해결</option>
+                    <option value="comparison" {% if prompt_type == "comparison" %}selected{% endif %}>비교</option>
+                    <option value="usecase" {% if prompt_type == "usecase" %}selected{% endif %}>활용사례</option>
+                    <option value="interpretation" {% if prompt_type == "interpretation" %}selected{% endif %}>해석/분석결과</option>
+                    <option value="support" {% if prompt_type == "support" %}selected{% endif %}>지원/설치/라이선스</option>
+                    <option value="default" {% if prompt_type == "default" %}selected{% endif %}>일반(기본)</option>
+                </select>
+                <label style="display:flex; align-items:center; gap:6px; font-size:14px; margin-left:10px;">
+                    <input type="checkbox" name="use_cross_encoder" id="cross-encoder-checkbox"
+                        {% if use_cross_encoder %}checked{% endif %}>
+                    Cross-Encoder Rerank 사용
+                </label>
+            </div>
+        </form>
+
+        <button type="button" onclick="showLogCanvas()" style="margin:12px 0 0 0; font-size:14px;">로그 미리보기</button>
+        <div id="log-canvas">
+            <div id="log-canvas-inner">
+                <button onclick="closeLogCanvas()" style="position:absolute; top:12px; right:16px; background:transparent; border:none; font-size:19px; cursor:pointer;">&times;</button>
+                <h3>세션 대화 로그</h3>
+                <div id="log-md-preview" style="font-size:1em; margin-bottom:8px;"></div>
+                <button type="button" onclick="downloadLogFile()" style="margin-top:12px;">로그 저장(.md)</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        window.LOG_HISTORY = {{ answers_json | safe }};
+    </script>
+    <script>
+    function showLoading() {
+        document.getElementById("search-btn").disabled = true;
+        document.getElementById("loading-message").style.display = "";
+    }
+    function formatMetadata(mdobj) {
+        if (!mdobj || typeof mdobj !== "object") return "";
+        let lines = [];
+        for (const [k, v] of Object.entries(mdobj)) {
+            lines.push(`        - ${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`);
+        }
+        return lines.join('\n');
+    }
+    function makeLogMarkdown(history) {
+        let md = "# 챗봇 세션 대화 로그\n\n";
+        history.forEach((h, idx) => {
+            md += `## Q${idx+1}. ${h.query}\n\n`;
+        
+            // Add log metadata (search method, timestamp, etc.) to the modal
+            md += `---\n`;
+            md += `### **기본 정보:**\n\n`;
+            md += `---\n`;
+            md += `**검색 방법:** ${h.search_method}\n\n`;
+            md += `**프롬프트 종류:** ${h.prompt_type}\n\n`;
+            md += `**Cross-Encoder 사용:** ${h.use_cross_encoder}\n\n`;
+            md += `**검색 시간:** ${h.search_time}\n\n`;
+            md += `**생성 시간:** ${h.generation_time}\n\n`;
+            md += `**컬렉션 이름:** ${h.collection_name}\n\n`;
+            md += `**타임스탬프:** ${h.timestamp}\n\n`;
+            md += `---\n`;
+            md += `### **답변:**\n\n`;
+            md += `---\n`;
+            md += `> ${h.answer.trim()}\n\n`;
+            md += `---\n`;
+            md += `### **검색 결과:**\n\n`;
+            md += `---\n`;
+            (h.results || []).forEach((r, rdx) => {
+                md += `\nResult ${rdx+1}:  \n`;
+                md += `- Score: ${r.score}\n`;
+                // payload, content, metadata 처리
+                let payload = r.payload || {};
+                let content = payload.content || '';
+                md += `- Content: ${content.length > 200 ? content.slice(0,200)+'...' : content}\n`;
+                let meta = payload.metadata || {};
+                if (Object.keys(meta).length > 0) {
+                    md += `- Metadata:\n`;
+                    for (const [k, v] of Object.entries(meta)) {
+                        md += `    - ${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}\n`;
+                    }
+                }
+            });
+            md += `\n---\n`;
+        });
+        return md;
+    }
+    function showLogCanvas() {
+        let md = makeLogMarkdown(window.LOG_HISTORY || []);
+        document.getElementById('log-md-preview').innerHTML = marked.parse(md);
+        document.getElementById('log-canvas').style.display = 'flex';
+    }
+    function closeLogCanvas() {
+        document.getElementById('log-canvas').style.display = 'none';
+    }
+    function downloadLogFile() {
+        let md = makeLogMarkdown(window.LOG_HISTORY || []);
+        if(!md) { alert("저장할 대화가 없습니다."); return; }
+        const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "chat_log.md";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }, 0);
+    }
+    </script>
+</body>
+</html>
