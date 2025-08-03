@@ -23,7 +23,7 @@ class EmbeddingRoutingConfig:
     provider: Literal["huggingface", "fastembed", "vectorizer"]
     model_name: Optional[str] = None   # dense만 사용
     vectorizer_type: Optional[str] = None # "bm25" or "tfidf"
-    language: Optional[str] = "ko"     # "en" or "ko" (토크나이저 결정)
+    language: Optional[str] = "kr"     # "en" or "ko" (토크나이저 결정)
 
 # 전처리, 검색 양쪽 모두에서 재사용할 config입니다.
 # 현재 build_index.py에서 쓰고있습니다.

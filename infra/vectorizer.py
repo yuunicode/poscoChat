@@ -10,6 +10,7 @@ from rank_bm25 import BM25Okapi
 import numpy as np
 import pickle
 import nltk
+from urllib.error import URLError
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -17,22 +18,31 @@ from nltk.stem import WordNetLemmatizer
 # --- 필요한 NLTK 데이터 다운로드 (최초 1회 실행) ---
 # 이 코드는 스크립트 실행 환경에서 한 번만 실행되도록 관리하는 것이 좋습니다.
 # 예를 들어, 애플리케이션 시작 시점에 호출하거나, Dockerfile에 포함할 수 있습니다.
-# try:
-#     nltk.data.find('tokenizers/punkt')
-# except nltk.downloader.DownloadError:
-#     nltk.download('punkt')
-# try:
-#     nltk.data.find('corpora/stopwords')
-# except nltk.downloader.DownloadError:
-#     nltk.download('stopwords')
-# try:
-#     nltk.data.find('corpora/wordnet')
-# except nltk.downloader.DownloadError:
-#     nltk.download('wordnet')
-# try:
-#     nltk.data.find('corpora/omw-1.4') # WordNetLemmatizer 사용 시 필요
-# except nltk.downloader.DownloadError:
-#     nltk.download('omw-1.4')
+import nltk
+
+# punkt tokenizer
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+
+# stopwords
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
+
+# wordnet
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet')
+
+# omw-1.4 (WordNetLemmatizer에 필요)
+try:
+    nltk.data.find('corpora/omw-1.4')
+except LookupError:
+    nltk.download('omw-1.4')
 
 class BaseSparseVectorizer(ABC):
     """ 모든 sparse 벡터라이저의 기본 인터페이스 """
