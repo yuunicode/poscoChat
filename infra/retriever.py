@@ -36,7 +36,6 @@ class SparseSearch(SearchModule):
         
     def search(self, query: str) -> List[ScoredPoint]:
         sparse_vectors = self.sparse_vectorizer.transform([query])
-        # Convert the dict to a SparseVector if necessary
         sparse_vector = SparseVector(**sparse_vectors[0]) if isinstance(sparse_vectors[0], dict) else sparse_vectors[0]
 
         result = self.vectorstore.client.query_points(
@@ -54,8 +53,14 @@ class DenseSearch(SearchModule):
         self.embedding = embedding
         self.collection_name = collection_name
         
-    def search(self, query: str) -> List:
+    def search(self, query: str) -> List[ScoredPoint]:
         embedding_vector = list(self.embedding.encode([query]))[0]
+        # List[float] 타입 커버
+        if hasattr(embedding_vector, "tolist"):
+            embedding_vector = embedding_vector.tolist()
+        if not isinstance(embedding_vector, list):
+            embedding_vector = list(embedding_vector)
+
         result = self.vectorstore.client.query_points(
             collection_name = self.collection_name,
             query = embedding_vector,
@@ -75,15 +80,19 @@ class HybridSearch(SearchModule):
     def search(self, query: str) -> List:
         # 희소벡터
         sparse_vectors = self.sparse_vectorizer.transform([query])
-        # Convert the dict to a SparseVector if necessary
         sparse_vector = SparseVector(**sparse_vectors[0]) if isinstance(sparse_vectors[0], dict) else sparse_vectors[0]
 
         # 밀집벡터
         embedding_vector = list(self.embedding.encode([query]))[0]
+        # List[float] 타입 커버
+        if hasattr(embedding_vector, "tolist"):
+            embedding_vector = embedding_vector.tolist()
+        if not isinstance(embedding_vector, list):
+            embedding_vector = list(embedding_vector)
 
         result = self.vectorstore.client.query_points(
             collection_name = self.collection_name,
-            prefetch=[
+            prefetch = [
                 Prefetch(
                     query = sparse_vector,
                     using = EmbeddingType.SPARSE.value,
@@ -92,10 +101,51 @@ class HybridSearch(SearchModule):
                 Prefetch(
                     query = embedding_vector,
                     using = self.embedding.embedding_type.value,
-                    limit = 20,
+                    limit = 20
+
                 ),
             ],
-            query = FusionQuery(fusion = Fusion.RRF),
+            query = FusionQuery(fusion = Fusion.RRF)
         ).points
-
+        
         return result
+
+class MultiStageSearch(SearchModule):
+    def __init__(self, dense_embedding: BaseEmbedding, colbert_embedding: BaseEmbedding, collection_name: str, vectorstore: Qdrant):
+        super().__init__(vectorstore)
+        self.dense_embedding = dense_embedding
+        self.colbert_embedding = colbert_embedding
+        self.collection_name = collection_name
+        
+    def search(self, query: str) -> List:
+
+        # 밀집벡터
+        dense_embedding_vector = list(self.dense_embedding.encode([query]))[0]
+        # List[float] 타입 커버
+        if hasattr(dense_embedding_vector, "tolist"):
+            dense_embedding_vector = dense_embedding_vector.tolist()
+        if not isinstance(dense_embedding_vector, list):
+            dense_embedding_vector = list(dense_embedding_vector)
+
+        # 코버트 벡터
+        colbert_embedding_vector = (list(self.colbert_embedding.encode([query]))[0]).tolist()
+        if hasattr(colbert_embedding_vector, "tolist"):
+            colbert_embedding_vector = colbert_embedding_vector.tolist()
+        if not isinstance(colbert_embedding_vector, list):
+            colbert_embedding_vector = list(colbert_embedding_vector)
+                
+        result = self.vectorstore.client.query_points(
+            collection_name = self.collection_name,
+            prefetch =
+                Prefetch(
+                    query = dense_embedding_vector,
+                    using = self.dense_embedding.embedding_type.value,
+                    limit = 100,
+                ),
+            query = colbert_embedding_vector,
+            using = self.colbert_embedding.embedding_type.value,
+            limit = 20
+        ).points
+        
+        return result
+

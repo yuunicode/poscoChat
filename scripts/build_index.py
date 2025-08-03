@@ -24,7 +24,7 @@ def main():
     # TODO: 아래는 임시방편으로, 실제로는 settings에서 가져와야 함
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    collection_name = f"{settings.COLLECTION_NAME}_{timestamp}"
+    collection_name = f"{settings.COLLECTION_NAME}"
 
     enabled_types = [
         EmbeddingType.SPARSE,
@@ -86,7 +86,7 @@ def main():
             # Dense embedding 로딩
             if routing.provider == "huggingface":
                 model_name = routing.model_name if routing.model_name is not None else "unknown"
-                model = HuggingFaceEmbedding(model_name)
+                model = HuggingFaceEmbedding(model_name, etype)
             elif routing.provider == "fastembed":
                 model_name = routing.model_name if routing.model_name is not None else "unknown"
                 model = FastEmbedEmbedding(model_name, etype, use_cuda = USE_CUDA)
@@ -215,9 +215,11 @@ def upload_all_vectors_to_qdrant(
             # Dense
             for etype in [EmbeddingType.DENSE_SMALL, EmbeddingType.DENSE_LARGE]:
                 if etype in dense_vecs_by_type:
-                    all_vectors[etype.value] = dense_vecs_by_type[etype][j]
+                    vec = dense_vecs_by_type[etype][j]
+                    all_vectors[etype.value] = vec.tolist() if hasattr(vec, "tolist") else list(vec)
             # Sparse
-            all_vectors[EmbeddingType.SPARSE.value] = sparse_vecs
+            if sparse_vecs is not None:
+                all_vectors[EmbeddingType.SPARSE.value] = sparse_vecs
 
             points.append(PointStruct(
                 id      = point_id,

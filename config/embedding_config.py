@@ -23,23 +23,39 @@ class EmbeddingRoutingConfig:
     provider: Literal["huggingface", "fastembed", "vectorizer"]
     model_name: Optional[str] = None   # dense만 사용
     vectorizer_type: Optional[str] = None # "bm25" or "tfidf"
-    language: Optional[str] = "en"     # "en" or "ko" (토크나이저 결정)
+    language: Optional[str] = "ko"     # "en" or "ko" (토크나이저 결정)
 
 # 전처리, 검색 양쪽 모두에서 재사용할 config입니다.
 # 현재 build_index.py에서 쓰고있습니다.
+# EMBEDDING_TYPE_CONFIGS: Dict[EmbeddingType, EmbeddingRoutingConfig] = {
+#     EmbeddingType.SPARSE: EmbeddingRoutingConfig(
+#         provider = "vectorizer",
+#         vectorizer_type = "tfidf",
+#         language = "en"
+#     ),
+#     EmbeddingType.DENSE_LARGE: EmbeddingRoutingConfig(
+#         provider = "fastembed",
+#         model_name = "BAAI/bge-small-en-v1.5"
+#     ),
+#     EmbeddingType.COLBERT: EmbeddingRoutingConfig(
+#         provider = "fastembed",
+#         model_name = "colbert-ir/colbertv2.0"
+#     ),    
+# }
 EMBEDDING_TYPE_CONFIGS: Dict[EmbeddingType, EmbeddingRoutingConfig] = {
     EmbeddingType.SPARSE: EmbeddingRoutingConfig(
         provider = "vectorizer",
-        vectorizer_type = "tfidf",
-        language = "en"
+        vectorizer_type = "bm25",
+        language = "kr"
     ),
     EmbeddingType.DENSE_LARGE: EmbeddingRoutingConfig(
         provider = "fastembed",
-        model_name = "BAAI/bge-small-en-v1.5"
+        model_name = "nomic-ai/nomic-embed-text-v1.5-Q"
     ),
     EmbeddingType.COLBERT: EmbeddingRoutingConfig(
         provider = "fastembed",
-        model_name = "colbert-ir/colbertv2.0"
+        model_name = "jinaai/jina-colbert-v2"
     ),    
 }
+
 

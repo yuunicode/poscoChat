@@ -19,17 +19,29 @@ class BaseEmbedding(ABC):
 class HuggingFaceEmbedding(BaseEmbedding):
     def __init__(self, model_name: str, embedding_type: EmbeddingType):
         super().__init__(model_name, embedding_type)
-        from transformers import AutoModel, AutoTokenizer
-        self.model = AutoModel.from_pretrained(model_name)
+        from transformers import AutoModelForMaskedLM, AutoTokenizer
+        self.model = AutoModelForMaskedLM.from_pretrained(model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model.eval()
 
-    def encode(self, texts: List[str]):
+    def encode(self, texts: List[str]) -> List[np.ndarray]:
         import torch
         inputs = self.tokenizer(texts, return_tensors="pt", padding=True, truncation=True)
         with torch.no_grad():
             outputs = self.model(**inputs)
-            return outputs.last_hidden_state[:, 0, :].cpu().tolist()
+
+            if self.embedding_type in (EmbeddingType.DENSE_SMALL, EmbeddingType.DENSE_LARGE):
+                # [CLS] 토큰 임베딩 사용 (BERT 계열 기준)
+                embeddings = outputs.last_hidden_state[:, 0, :]  # shape: (batch_size, hidden_dim)
+                return [vec.cpu().numpy() for vec in embeddings]
+
+            elif self.embedding_type == EmbeddingType.COLBERT:
+                # Token-level embeddings 사용
+                token_embeddings = outputs.last_hidden_state  # shape: (batch_size, seq_len, hidden_dim)
+                return [sentence.cpu().numpy() for sentence in token_embeddings]  # List[np.ndarray] per sentence
+
+            else:
+                raise ValueError(f"Unsupported embedding type for HuggingFace: {self.embedding_type}")
 
     def get_dimension(self) -> int:
         return self.model.config.hidden_size

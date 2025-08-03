@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     # ----------------------------------------- 
     #               사용자 설정 파트   
     # -----------------------------------------
-    COLLECTION_NAME: str = "collection"
-    FILENAME: str = "course_material.pptx"
+    COLLECTION_NAME: str = "test_ragservice"
+    FILENAME: str = "dev_doc.docx"
     # ----------------------------------------- 
     #               경로   
     # -----------------------------------------    
