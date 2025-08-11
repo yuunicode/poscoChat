@@ -1,7 +1,7 @@
 # config/settings.py
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
-
+from typing import List
 
 class Settings(BaseSettings):
     """
@@ -14,14 +14,15 @@ class Settings(BaseSettings):
     #               사용자 설정 파트   
     # -----------------------------------------
     COLLECTION_NAME: str = "test_ragservice"
+    # 단일 파일 호환을 위해 유지
     FILENAME: str = "dev_doc.docx"
+    # 여러 파일 입력 지원
+    FILENAMES: List[str] = ["dev_doc.docx", "table_test.docx", "course_material.pptx"]
     # ----------------------------------------- 
     #               경로   
     # -----------------------------------------    
     RAW_DATA_PATH: Path = Path("data/raw")
     PROCESSED_DATA_PATH: Path = Path("data/processed")
-    RAW_DATA_FILE_PATH: Path = RAW_DATA_PATH / FILENAME
-    PROCESSED_DATA_FILE_PATH: Path = PROCESSED_DATA_PATH / (FILENAME.rsplit('.', 1)[0] + ".jsonl")
 
     QDRANT_URL: str = "http://localhost:6333"
     INDEX_DIR: Path = Path("data/index")

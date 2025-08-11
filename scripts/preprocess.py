@@ -21,123 +21,42 @@ class BasePreprocessor(ABC):
     def __init__(self, filename: str):
         """ BasePreprocessor는 모든 전처리기 클래스의 기본 클래스입니다. """
         self.logger = logging.getLogger(__name__)
+        self.filename = filename
         self.filepath = settings.RAW_DATA_PATH / filename
-        self.records = [] # 초기화 시엔 비어있으며 parse 메서드 콜 이후로 채워짐
+        self.records: List[Dict[str, Any]] = [] # 초기화 시엔 비어있으며 parse 메서드 콜 이후로 채워짐
         self.chunker = Chunker()
             
     @abstractmethod
-    def parse(self) -> List[Dict[str, Any]]:
-        """
-        파일을 파싱하여 레코드를 생성하는 메소드.
-        
-        Args:
-            file_path (Path): 전처리할 파일의 경로.
-        
-        Returns:
-            List[Dict[str, Any]]: 전처리된 레코드 목록.
-        """
-        pass
-
+    def parse(self) -> List[Dict[str, Any]]: ...
     @abstractmethod
-    def preprocess(self) -> List[Dict[str, Any]]:
-        """
-        전처리 작업을 정의하는 추상 메서드입니다.
-        
-        Args:
-            file_path (Path): 전처리할 파일의 경로.
-        
-        Returns:
-            List[Dict[str, Any]]: 전처리된 레코드 목록.
-        """
-        pass
-
+    def preprocess(self) -> List[Dict[str, Any]]: ...
     @abstractmethod
-    def get_chunking_configs(self) -> List[Dict[str, Any]]:
-        """
-        이 전처리기 인스턴스에 특화된 청킹 설정 목록을 반환합니다.
-        각 설정은 'chunking_type', 'strategy', 그리고 선택적인 'kwargs'를 포함해야 합니다.
-        """
-        pass
-
-    @abstractmethod
-    def postprocess(self) -> List[Dict[str, Any]]:
-        """
-        후처리 작업을 정의하는 추상 메서드입니다.
-        
-        Args:
-            file_path (Path): 후처리할 파일의 경로.
-        
-        Returns:
-            None
-        """
-        pass
-
-    def chunk(self, chunking_type: ChunkingType, strategy: ChunkingStrategy, **kwargs) -> None:
-        
-        text_records = [rec for rec in self.records if rec.get("category") != "Table"]
-        table_records = [rec for rec in self.records if rec.get("category") == "Table"]
-        processed_records: List[Dict[str, Any]] = []
-        self.logger.info(f"청킹 전 현재 텍스트 레코드: {len(text_records)}, 테이블 레코드: {len(table_records)}")
-
-        if chunking_type == ChunkingType.NARRATIVE:
-            # Apply text chunking only to narrative (non-table) records
-            processed_text_records = self.chunker.apply_text_chunking(
-                text_records,
-                strategy=strategy, # Use the strategy passed to the chunk method
-                **kwargs
-            )
-            self.logger.info(f"텍스트 청킹 완료. 전처리 된 레코드 수: {len(processed_text_records)}")
-            processed_records.extend(processed_text_records)
-            processed_records.extend(table_records)
-            self.logger.info(f'청킹 완료. 총 레코드 수: {len(processed_records)}')
-
-        elif chunking_type == ChunkingType.TABLE:
-            # Apply table chunking only to table records
-            processed_table_records = self.chunker.apply_table_chunking(
-                table_records,
-                strategy=strategy, # Use the strategy passed to the chunk method
-                **kwargs
-            )
-            self.logger.info(f"테이블 청킹 완료. 전처리 된 레코드 수: {len(processed_table_records)}")
-            processed_records.extend(processed_table_records)
-            processed_records.extend(text_records)
-            self.logger.info(f'청킹 완료. 총 레코드 수: {len(processed_records)}')
-        
-        else:
-            self.logger.warning(f"알 수 없는 청킹 유형입니다: '{chunking_type}'. 원본 레코드를 반환합니다.")
-            return 
-        
-        self.records =  processed_records
+    def postprocess(self) -> List[Dict[str, Any]]: ...
 
     def to_jsonl(self) -> None:
         """
         레코드를 JSONL 형식으로 저장하는 메서드.
-        
-        Args:
-            records (List[Dict[str, Any]]): 저장할 레코드 목록.
-            output_path (Path): 저장할 JSONL 파일 경로.
+        파일별로 {PROCESSED_DATA_PATH}/{stem}.jsonl 로 저장합니다.
         """
         try:
-            jsonl_output_path = Path(settings.PROCESSED_DATA_FILE_PATH)  # Path 객체 확인
-            # 경로가 유효한지 확인
-            if not jsonl_output_path.parent.exists():
-                raise ValueError(f"디렉터리가 존재하지 않습니다: {jsonl_output_path.parent}")
-            
-            #파일을 쓰기 모드로 열기
+            stem = self.filename.rsplit('.', 1)[0]
+            jsonl_output_path = settings.PROCESSED_DATA_PATH / f"{stem}.jsonl"
+            jsonl_output_path.parent.mkdir(parents=True, exist_ok=True)
+
             with jsonl_output_path.open("w", encoding="utf-8") as f:
                 for rec in self.records:
                     try:
-                        # 레코드 직렬화 (json.dumps에서 직렬화할 수 없는 객체 처리)
                         json_str = json.dumps(rec, ensure_ascii=False)
                         f.write(json_str + "\n")
                     except TypeError as e:
                         self.logger.error(f"레코드 직렬화 오류: {rec} - {e}")
-            
+
             self.logger.info(f"경로: {jsonl_output_path} 에 저장 완료했습니다. : 총 청크 수: {len(self.records)}")
-            
+
         except Exception as e:
             self.logger.error(f"Failed to save JSONL file. : {e}")
             raise
+
 
     def _save_table_html(self, html_code: str, table_id: str) -> Path:
         """
@@ -146,7 +65,7 @@ class BasePreprocessor(ABC):
         """
         try:
             # FILENAME에서 확장자 제거하고, 'tables' 폴더 경로 생성
-            filename_without_extension = settings.FILENAME.rsplit('.', 1)[0]  # 확장자 제거
+            filename_without_extension = self.filename.rsplit('.', 1)[0]  # 확장자 제거
             table_out_path = settings.PROCESSED_DATA_PATH / filename_without_extension / 'tables'
             table_out_path.mkdir(parents=True, exist_ok=True)  # 새로운 폴더 생성
 
@@ -172,7 +91,7 @@ class BasePreprocessor(ABC):
         """
 
         # FILENAME에서 확장자 제거하고, 'images' 폴더 경로 생성
-        filename_without_extension = settings.FILENAME.rsplit('.', 1)[0]  # FILENAME에서 확장자 제거
+        filename_without_extension = self.filename.rsplit('.', 1)[0]  # FILENAME에서 확장자 제거
         image_out_path = settings.PROCESSED_DATA_PATH / filename_without_extension / 'images'
 
         # 기존 폴더가 있으면 삭제 후 새로 생성
@@ -181,44 +100,41 @@ class BasePreprocessor(ABC):
         image_out_path.mkdir(parents=True, exist_ok=True)  # 새로운 폴더 생성
 
         # DOCX 파일 처리
-        if settings.FILENAME.endswith(".docx"):
+        if self.filename.endswith(".docx"):
             try:
-                doc = Document(str(settings.RAW_DATA_FILE_PATH))
+                doc = Document(str(self.filepath))
             except FileNotFoundError:
-                logging.error(f"Image source file {settings.RAW_DATA_FILE_PATH} not found.")
+                logging.error(f"Image source file {self.filepath} not found.")
                 return
             except Exception as e:
-                logging.error(f"Error opening DOCX for image extraction from {settings.RAW_DATA_FILE_PATH.name}: {e}")
+                logging.error(f"Error opening DOCX for image extraction from {self.filepath.name}: {e}")
                 return
- 
-            # DOCX에서 이미지 추출
+
             rels = doc.part.rels
             image_idx = 0
 
-            # 이미지 추출 및 저장
             for rel in rels.values():
                 if "image" in rel.reltype:
                     image_idx += 1
                     image_data = rel.target_part.blob
-                    ext = Path(rel.target_part.partname).suffix  # 이미지 확장자 추출
+                    ext = Path(rel.target_part.partname).suffix
                     image_name = f"{filename_without_extension}_image_{image_idx}{ext}"
-                    (image_out_path / image_name).write_bytes(image_data)  # 이미지 저장
+                    (image_out_path / image_name).write_bytes(image_data)
 
             logging.info(f"Saved {image_idx} images from DOCX to {image_out_path}")
 
         # PPTX 파일 처리
-        elif settings.FILENAME.endswith(".pptx"):
+        elif self.filename.endswith(".pptx"):
             try:    
-                presentation = Presentation(str(settings.RAW_DATA_FILE_PATH))
+                presentation = Presentation(str(self.filepath))
             except FileNotFoundError:
-                logging.error(f"Image source file {settings.RAW_DATA_FILE_PATH} not found.")
+                logging.error(f"Image source file {self.filepath} not found.")
                 return
             except Exception as e:
-                logging.error(f"Error opening PPTX for image extraction from {settings.RAW_DATA_FILE_PATH.name}: {e}")
+                logging.error(f"Error opening PPTX for image extraction from {self.filepath.name}: {e}")
                 return
 
             image_idx = 0
-            # PPTX에서 이미지 추출
             for slide in presentation.slides:
                 for shape in slide.shapes:
                     if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
@@ -227,7 +143,6 @@ class BasePreprocessor(ABC):
                         image_idx += 1
                         image_name = f"{filename_without_extension}_image_{image_idx}.{ext}"
                         (image_out_path / image_name).write_bytes(image.blob)
-
         else:
             logging.error("Unsupported file type. Only DOCX and PPTX files are supported.")
             return
@@ -266,18 +181,15 @@ class DocxPreprocessor(BasePreprocessor):
         """   
         # ------------- STEP 1: 파일 읽기
         try:
-            elements = []
             with open(self.filepath, 'rb') as file:
-                elements = partition_docx(file                    = file
-                                        , extract_images_in_docx  = False
-                                        , include_page_breaks     = False)
+                elements = partition_docx(file = file, extract_images_in_docx = False, include_page_breaks = False)
         except FileNotFoundError:
             logging.error(f"File {self.filepath} not found.")
             return [{}] 
-        
         except Exception as e:
             logging.error(f"Unexpected error reading DOCX file: {e}")
             return [{}]      
+
         
         # ------------- STEP 2: 파싱 시작 
         records: List[Dict[str, Any]] = []      # 앞으로 쓰일 레코드
@@ -301,11 +213,9 @@ class DocxPreprocessor(BasePreprocessor):
 
             # -------- 조건문 추가: 테이블 카테고리인 경우 테이블 정보 추출
             if rec.get("category") == "Table" and rec["metadata"]["general_info"].get("text_as_html"):
-                table_html_code = rec["metadata"]["general_info"]["text_as_html"]
-                table_uid = uuid.uuid4().hex[:8] # 테이블 자체의 고유 ID
-
                 # general_info에서 테이블 관련 원본 HTML 정보 삭제 (text_as_html은 table_info로 이동)
-                rec["metadata"]["general_info"].pop("text_as_html", None)
+                table_html_code = rec["metadata"]["general_info"].pop("text_as_html", None)
+                table_uid = uuid.uuid4().hex[:8]
                 
                 # table_info에 필요한 정보 추가 원본 HTML, 고유 ID, 그리고 현재 제목
                 rec["metadata"]["table_info"] = {
@@ -353,6 +263,43 @@ class DocxPreprocessor(BasePreprocessor):
 
         return self.records
     
+    def chunk(self, chunking_type: ChunkingType, strategy: ChunkingStrategy, **kwargs) -> None:
+        
+        text_records = [rec for rec in self.records if rec.get("category") != "Table"]
+        table_records = [rec for rec in self.records if rec.get("category") == "Table"]
+        processed_records: List[Dict[str, Any]] = []
+        self.logger.info(f"청킹 전 현재 텍스트 레코드: {len(text_records)}, 테이블 레코드: {len(table_records)}")
+
+        if chunking_type == ChunkingType.NARRATIVE:
+            # Apply text chunking only to narrative (non-table) records
+            processed_text_records = self.chunker.apply_text_chunking(
+                text_records,
+                strategy=strategy, # Use the strategy passed to the chunk method
+                **kwargs
+            )
+            self.logger.info(f"텍스트 청킹 완료. 전처리 된 레코드 수: {len(processed_text_records)}")
+            processed_records.extend(processed_text_records)
+            processed_records.extend(table_records)
+            self.logger.info(f'청킹 완료. 총 레코드 수: {len(processed_records)}')
+
+        elif chunking_type == ChunkingType.TABLE:
+            # Apply table chunking only to table records
+            processed_table_records = self.chunker.apply_table_chunking(
+                table_records,
+                strategy=strategy, # Use the strategy passed to the chunk method
+                **kwargs
+            )
+            self.logger.info(f"테이블 청킹 완료. 전처리 된 레코드 수: {len(processed_table_records)}")
+            processed_records.extend(processed_table_records)
+            processed_records.extend(text_records)
+            self.logger.info(f'청킹 완료. 총 레코드 수: {len(processed_records)}')
+        
+        else:
+            self.logger.warning(f"알 수 없는 청킹 유형입니다: '{chunking_type}'. 원본 레코드를 반환합니다.")
+            return 
+        
+        self.records =  processed_records
+
     def get_chunking_configs(self) -> List[Dict[str, Any]]:
         """ DOCX 파일에 대한 기본 청킹 설정 목록을 반환합니다. """
         return [
@@ -376,7 +323,7 @@ class DocxPreprocessor(BasePreprocessor):
     
     def postprocess(self) -> List[Dict[str, Any]]:
         # ------------- STEP 1: 메타데이터 삭제
-        self.delete_metadata(["category_depth", "page_number", "filetype", "languages","parent_id"])
+        # self.delete_metadata(["category_depth", "page_number", "filetype", "languages","parent_id"])
         
         # ------------- STEP 2: 타이틀 삭제
         self.remove_title_records()
@@ -587,12 +534,13 @@ class PptxPreprocessor(BasePreprocessor):
         
         return self.records
 
-    def get_chunking_configs(self) -> List[Dict[str, Any]]:
-        return super().get_chunking_configs()
     def preprocess(self) -> List[Dict[str, Any]]:
-        return super().preprocess()
+        # PPTX는 현재 이미지 추출만 사용 (필요시 확장)
+        self._save_images()
+        return self.records
     def postprocess(self) -> List[Dict[str, Any]]:
-        return super().postprocess()
+        # 현재는 별도 후처리 없음
+        return self.records
 
 class PreprocessingPipeline:
     """
@@ -633,23 +581,28 @@ class PreprocessingPipeline:
         self.preprocessor.parse()
         self.preprocessor.preprocess()
 
-        chunking_configs = self.preprocessor.get_chunking_configs()
-        for i, config in enumerate(chunking_configs):
-            chunking_type   = config["chunking_type"]
-            strategy        = config["strategy"]
-            kwargs          = config.get("kwargs", {})
-            
-            self.logger.info(f"청킹 단계 {i+1}/{len(chunking_configs)}: 유형='{chunking_type.name}', 전략='{strategy.name}'")
-            self.preprocessor.chunk(
-                chunking_type   =   chunking_type,
-                strategy        =   strategy,
-                **kwargs
-            )
+        # DOCX에서만 chunk 수행
+        if isinstance(self.preprocessor, DocxPreprocessor):
+            chunking_configs = self.preprocessor.get_chunking_configs()
+            for i, config in enumerate(chunking_configs):
+                chunking_type   = config["chunking_type"]
+                strategy        = config["strategy"]
+                kwargs          = config.get("kwargs", {})
+                self.logger.info(f"청킹 단계 {i+1}/{len(chunking_configs)}: 유형='{chunking_type.name}', 전략='{strategy.name}'")
+                self.preprocessor.chunk(
+                    chunking_type   =   chunking_type,
+                    strategy        =   strategy,
+                    **kwargs
+                )
 
         self.preprocessor.postprocess()
         self.preprocessor.to_jsonl()
         
-    
+def _run_all_from_settings():
+    targets = settings.FILENAMES if getattr(settings, "FILENAMES", None) else [settings.FILENAME]
+    for fname in targets:
+        pipeline = PreprocessingPipeline(filename=fname)
+        pipeline.run()
+
 if __name__ == "__main__":
-    preprocessing = PreprocessingPipeline(filename = settings.FILENAME)
-    preprocessing.run()
+    _run_all_from_settings()

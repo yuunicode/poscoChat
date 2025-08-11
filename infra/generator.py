@@ -279,7 +279,7 @@ class OpenRouterGenerator(BaseLLMGenerator):
 
 if __name__ == "__main__":
     # 생성기 선택 예시
-    generator = OllamaGenerator(model_name="qwen3:4b")  
+    generator = OllamaGenerator(model_name="qwen3:8b")  
     # or
     generator = OpenRouterGenerator(model_name="qwen/qwen3-8b:free")
     

@@ -19,8 +19,8 @@ class BaseEmbedding(ABC):
 class HuggingFaceEmbedding(BaseEmbedding):
     def __init__(self, model_name: str, embedding_type: EmbeddingType):
         super().__init__(model_name, embedding_type)
-        from sentence_transformers import AutoModelForMaskedLM, AutoTokenizer
-        self.model = AutoModelForMaskedLM.from_pretrained(model_name)
+        from transformers import AutoModel, AutoTokenizer
+        self.model = AutoModel.from_pretrained(model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model.eval()
 
